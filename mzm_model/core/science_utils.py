@@ -4,6 +4,8 @@ import math
 import numpy as np
 import random
 import copy
+from numpy import sum,isrealobj,sqrt
+from numpy.random import standard_normal
 
 from mzm_model.core.emulation_settings import h, frequency, q, eta_s, input_current, gamma_1, gamma_2, k_splitter, \
     b, c, wavelength, phi_laser, er, insertion_loss, v_off, v_cm, M, evm_factor, L
@@ -272,3 +274,29 @@ def ber_estimation(evm):
     ber = (2*(1 - 1/L)/np.log2(L))*\
           math.erfc(np.sqrt((((3*np.log2(L))/(L**(2)- 1)))*2/(evm**2 * np.log2(M))))
     return ber
+
+# AWGN channel definition
+def awgn(s,SNRdB,L=1):
+    """
+    AWGN channel
+    Add AWGN noise to input signal. The function adds AWGN noise vector to signal 's' to generate a resulting signal vector 'r' of specified SNR in dB. It also
+    returns the noise vector 'n' that is added to the signal 's' and the power spectral density N0 of noise added
+    Parameters:
+        s : input/transmitted signal vector
+        SNRdB : desired signal to noise ratio (expressed in dB) for the received signal
+        L : oversampling factor (applicable for waveform simulation) default L = 1.
+    Returns:
+        r : received signal vector (r=s+n)
+"""
+    gamma = 10**(SNRdB/10) #SNR to linear scale
+    if s.ndim==1:# if s is single dimensional vector
+        P=L*sum(abs(s)**2)/len(s) #Actual power in the vector
+    else: # multi-dimensional signals like MFSK
+        P=L*sum(sum(abs(s)**2))/len(s) # if s is a matrix [MxN]
+    N0=P/gamma # Find the noise spectral density
+    if isrealobj(s):# check if input is real/complex object type
+        n = sqrt(N0/2)*standard_normal(s.shape) # computed noise
+    else:
+        n = sqrt(N0/2)*(standard_normal(s.shape)+1j*standard_normal(s.shape))
+    r = s + n # received signal
+    return r

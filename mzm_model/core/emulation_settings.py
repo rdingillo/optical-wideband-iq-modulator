@@ -52,8 +52,8 @@ v_off = 0     # [V]
 '''Griffin MZM Params'''
 v_bias = - np.pi / v_pi
 v_pi_griffin = - np.pi / v_bias
-b = 0.05    # Phase Non-linearity parameter, between 0.0 (linear) and 0.15 (non-linear)
-c = 15    # Transmission Absorption parameter, between 20 (same LiNbO3 behavior)and 4.3
+b = 0.0    # Phase Non-linearity parameter, between 0.0 (linear) and 0.15 (non-linear)
+c = 20    # Transmission Absorption parameter, between 20 (same LiNbO3 behavior)and 4.3
 
 phase_offset = 0
 
@@ -65,24 +65,26 @@ bias_offset_i = 0.0
 bias_offset_q = 0.0
 # Noise params
 noise_flag = True
-std = 0.1     # std is the standard deviation of normal distribution, for AWGN (default value is 0.01)
+std = 0.01     # std is the standard deviation of normal distribution, for AWGN (default value is 0.01)
 sim_duration = 10e-9     # simulation duration
+SNRdB_InP = 40 # for AWGN channel of InP
+SNRdB_LiNb = 40 # for AWGN channel of LiNb
 
 # symbol generator params
 'PRBS'
-poldeg = 9  # polynomial degree for PRBS generator, between 5 and 28
+poldeg = 8  # polynomial degree for PRBS generator, between 5 and 28
 prbs_counter = 50   # number of the first generating polynomials, between 1 and 176
 zero_pad = True     # flag to add the last sequence of zeros to have 2^n sequences
 modulation_format = '16qam'
 modulation_format = modulation_format.upper()
-Rs = 68e9  # baud-rate, in Gbaud
+Rs = 32e9  # baud-rate, in Gbaud
 Ts = 1/Rs  # symbol period
 num_signals = 2**poldeg     # number of transmitted signals
 
 'Raised cosine Params'
 sps = 20   # define samples per symbol (N.B. CHOOSE ONLY EVEN NUMBERS TO GET CORRECT RESULTS)
 N_taps = sps*num_signals    # length of the filter in samples
-beta = 0.5     # roll-off for raised cosine (ideal is 0, actually use 0.09)
+beta = 0.09     # roll-off for raised cosine (ideal is 0, actually use 0.09)
 samp_f = sps*Rs     # sampling frequency
 
 channel_bw = (1 + beta)*Rs  # [Hz] Frequency 'amplitude' of the primary lobe
