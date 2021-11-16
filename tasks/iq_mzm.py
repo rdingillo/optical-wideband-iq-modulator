@@ -25,12 +25,13 @@ from mzm_model.core.emulation_settings import h, frequency, q, eta_s, input_curr
     v_diff, v_in_limit, v_in_step, er, insertion_loss, phase_offset, v_off, b, c, wavelength, gamma_1, gamma_2, \
     modulation_format, n_bit, num_signals, std, op_freq, M, poldeg, prbs_counter, zero_pad, sps, beta, Ts, Rs, \
     samp_f, N_taps, v_tx_param, noise_flag, norm_factor, norm_rx, v_drive, v_bias, v_pi_griffin, er_i, er_q, \
-    bias_offset_i, bias_offset_q
+    bias_offset_i, bias_offset_q, SNRdB_InP, SNRdB_LiNb
 from mzm_model.core.math_utils import lin2db, lin2dbm, db2lin
-from mzm_model.core.science_utils import rand_key, evm_rms_estimation, snr_estimation, ber_estimation
+from mzm_model.core.science_utils import rand_key, evm_rms_estimation, snr_estimation, ber_estimation, awgn
 from mzm_model.core.prbs_generator import prbs_generator
 from mzm_model.core.utils import plot_constellation, eo_tf_iq_draw, savitzky_golay
 from scipy import signal
+
 start_time = time.time()
 
 matplotlib.use('Qt5Agg')
@@ -569,8 +570,8 @@ lpf_filled_df = pd.merge_ordered(fill_values_df, lpf_mag_df_interp)
 # Perform FFT of signals and retrieve the frequencies
 # FFT performed only on the wanted samples
 if noise_flag == True:
-    i_samples = [i_sig[i*sps] + noise_i[i] for i in range(num_signals)]
-    q_samples = [q_sig[i*sps] + noise_q[i] for i in range(num_signals)]
+    i_samples = [i_sig[i*sps]  for i in range(num_signals)]
+    q_samples = [q_sig[i*sps]  for i in range(num_signals)]
 else:
     i_samples = [i_sig[i*sps] for i in range(num_signals)]
     q_samples = [q_sig[i*sps] for i in range(num_signals)]
@@ -601,8 +602,8 @@ sig_freq = np.fft.fftshift(sig_freq)
 # add some noise generated randomly before
 
 # in time domain
-i_shaped_t = scipy.signal.fftconvolve(i_sig, rrcos_filter[1]) + noise_i
-q_shaped_t = scipy.signal.fftconvolve(q_sig, rrcos_filter[1]) + noise_q
+i_shaped_t = scipy.signal.fftconvolve(i_sig, rrcos_filter[1])
+q_shaped_t = scipy.signal.fftconvolve(q_sig, rrcos_filter[1])
 
 # in frequency domain
 i_shaped = np.multiply(i_sig_fft, rrcos_fft)
@@ -662,8 +663,8 @@ bandcut_q_mag = 20*np.log10(np.abs(bandcut_q))
 # here we add AWGN noise to see what happens to the signal when a noise is present
 # if we add it before the IFFT, no effect is visible
 if noise_flag == True:
-    i_shaped_time = np.fft.ifft(bandcut_i) + noise_i[0:len(bandcut_i)]
-    q_shaped_time = np.fft.ifft(bandcut_q) + noise_q[0:len(bandcut_q)]
+    i_shaped_time = np.fft.ifft(bandcut_i)
+    q_shaped_time = np.fft.ifft(bandcut_q)
 else:
     i_shaped_time = np.fft.ifft(bandcut_i)
     q_shaped_time = np.fft.ifft(bandcut_q)
@@ -820,9 +821,22 @@ fft_classical_rx_mag = 20*np.log10(np.abs(fft_classical_rx))
 fft_griffin_rx = (np.fft.fft(out_fields_combiner_Griffin_list))
 fft_griffin_rx_mag = 20*np.log10(np.abs(fft_griffin_rx))
 
+# perform IFFT and add optical noise power at output of the transmitter
+griffin_tx_time = np.fft.ifft(fft_griffin_rx)
+classical_tx_time = np.fft.ifft(fft_classical_rx)
+
+noise_griffin = awgn(griffin_tx_time, SNRdB_InP, L=1)
+noise_classical = awgn(classical_tx_time, SNRdB_LiNb, L=1)
+
+griffin_tx_time += noise_griffin
+classical_tx_time += noise_classical
+
+fft_griffin_rx_2 = np.fft.fft(griffin_tx_time/2)
+fft_classical_rx_2 = np.fft.fft(classical_tx_time/2)
+
 # apply RRCOS filter in frequency by multiplication
-griffin_adapt_filter = np.multiply(fft_griffin_rx, rrcos_fft)
-classical_adapt_filter = np.multiply(fft_classical_rx, rrcos_fft)
+griffin_adapt_filter = np.multiply(fft_griffin_rx_2, rrcos_fft)
+classical_adapt_filter = np.multiply(fft_classical_rx_2, rrcos_fft)
 
 # apply IFFT to obtain the waveforms in time domain
 griffin_rx_time = np.fft.ifft(griffin_adapt_filter)
@@ -858,9 +872,9 @@ evm_classic_rx = evm_rms_estimation(prbs_no_duplicates, index_dict, ideal_norm_c
 evm_griffin_tx = evm_rms_estimation(prbs_no_duplicates, index_dict, ideal_norm_constellation, shifted_list_griffin)*100
 evm_griffin_rx = evm_rms_estimation(prbs_no_duplicates, index_dict, ideal_norm_constellation, griffin_rx_const)*100
 
-# print('EVM CLASSIC TX:', evm_classic_tx, '%')
+print('EVM CLASSIC TX:', evm_classic_tx, '%')
 print('EVM CLASSIC RX:', evm_classic_rx, '%')
-# print('EVM GRIFFIN TX:', evm_griffin_tx, '%')
+print('EVM GRIFFIN TX:', evm_griffin_tx, '%')
 print('EVM GRIFFIN RX:', evm_griffin_rx, '%')
 
 ber_classic_tx = ber_estimation(evm_classic_tx/100)
@@ -871,7 +885,10 @@ ber_griffin_rx = ber_estimation(evm_griffin_rx/100)
 snr_classic_rx = -2*lin2db(evm_classic_rx/100)
 snr_griffin_rx = -2*lin2db(evm_griffin_rx/100)
 
-# print('BER CLASSIC TX:', ber_classic_tx)
+print('BER CLASSIC TX:', ber_classic_rx)
+print('SNR CLASSIC TX:', snr_classic_rx)
+print('BER GRIFFIN TX:', ber_griffin_rx)
+print('SNR GRIFFIN TX:', snr_griffin_rx)
 print('BER CLASSIC RX:', ber_classic_rx)
 print('SNR CLASSIC RX:', snr_classic_rx)
 print('BER GRIFFIN RX:', ber_griffin_rx)
